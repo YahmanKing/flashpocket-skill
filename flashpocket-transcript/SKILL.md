@@ -23,7 +23,7 @@ Use Python 3.9+ and the bundled `scripts/decks.py`, resolving the script from **
 
 ## Extract, validate, save
 
-Prepare a temporary UTF-8 JSON array of sanitized candidates, in priority order:
+Prepare a temporary UTF-8 JSON array of sanitized candidates inside the current working directory (use a new temporary filename, never overwrite an input or example), in priority order:
 
 ```json
 [{"meaning":"認識を合わせる", "chunk":"get on the same page", "example":"Let's get on the same page before we proceed.", "bidirectional":false}]
@@ -46,4 +46,4 @@ Pass `--limit N` for an explicit different limit. New files use `YYYY-MM-DD-<nam
 
 **Append only when the user supplies an existing target path explicitly.** Add `--append "<target-path>"`. A date/name match alone is not permission to append. The helper requires an in-folder one-line deck with exactly one valid, unique ID per source card line, keeps its existing bytes and IDs, and adds only new cards within the requested total limit. Never rewrite old meanings, examples or IDs. Invalid targets are left untouched.
 
-When no novel candidates remain, report “追加なし” and create no deck. On errors, report the cause and let the user resolve the relevant input; do not work around it by overwriting files. Remove your temporary candidates after use. Report the saved filename, added card count, duplicate/limit exclusions, and any excluded files without repeating transcript details. Suggest refreshing the linked folder in FlashPocket (or importing the file).
+When no novel candidates remain, report “追加なし” and create no deck. On errors, report the cause and let the user resolve the relevant input; do not work around it by overwriting files. Remove only your temporary candidates after use, using Python (for example `Path(path).unlink()`) or an authorized file tool. If cleanup is denied, report the leftover path. Report the saved filename, added card count, duplicate/limit exclusions, and any excluded files without repeating transcript details. Suggest refreshing the linked folder in FlashPocket (or importing the file).
