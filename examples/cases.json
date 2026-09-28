@@ -1,0 +1,5 @@
+[
+  {"case":"normalized-duplicate", "existing_name":"old.md", "existing":"# Old\n意味 ::: ＧＥＴ  ON THE SAME PAGE! — Another example. <!-- fp:kept -->\n", "append":false, "candidate_indices":[0], "expected_file":null, "expected_added_keys":[]},
+  {"case":"same-name-different-meeting", "existing_name":"2026-09-28-weekly-sync.md", "existing":"# Old\n旧 :: other chunk <!-- fp:kept -->\n", "append":false, "candidate_indices":[0], "expected_file":"2026-09-28-weekly-sync-2.md", "expected_added_keys":["get on the same page"]},
+  {"case":"explicit-append", "existing_name":"old.md", "existing":"# Old\n旧 :: other chunk <!-- fp:kept -->\n", "append":true, "candidate_indices":[1], "expected_file":"old.md", "expected_added_keys":["iron out the details"]}
+]
