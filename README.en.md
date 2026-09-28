@@ -1,13 +1,15 @@
 # FlashPocket Transcript
 
-A Claude Code skill that turns English expressions actually used in a meeting into Japanese-to-English cards,
+A Claude Code and Codex skill that turns English expressions actually used in a meeting into Japanese-to-English cards,
 then saves a Markdown deck to the folder you use with FlashPocket. It does not record or transcribe meetings.
 
 [日本語](README.md) · [Fictional transcript](examples/transcript.txt) · [Example deck](examples/2026-09-28-weekly-sync.md)
 
 ## Install
 
-Requires Claude Code and Python 3.9+. If a skill with the same name is already installed, inspect it before updating.
+Requires Python 3.9+. If a skill with the same name is already installed, inspect it before updating.
+
+### Claude Code
 
 ```sh
 git clone https://github.com/YahmanKing/flashpocket-transcript.git
@@ -21,6 +23,16 @@ Start a new Claude Code session:
 /flashpocket-transcript examples/transcript.txt
 Create useful workplace English chunks for the 2026-09-28 weekly-sync.
 ```
+
+### Codex
+
+Open `$skill-installer` in Codex and provide this public repository URL:
+
+```text
+$skill-installer https://github.com/YahmanKing/flashpocket-transcript/tree/main/flashpocket-transcript
+```
+
+After installation, invoke `$flashpocket-transcript` in a new Codex turn. Restart Codex if it does not appear.
 
 On first use, select the existing writable folder you linked in FlashPocket (the same iCloud Drive folder accessible
 from your Mac). The skill cannot read the iPhone's folder bookmark. It remembers your selection in

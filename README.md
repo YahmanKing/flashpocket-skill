@@ -1,14 +1,17 @@
 # FlashPocket Transcript
 
-会議で実際に使われた英語のチャンクから、日本語→英語の復習カードを作る Claude Code スキルです。
+会議で実際に使われた英語のチャンクから、日本語→英語の復習カードを作る、Claude Code と Codex 対応のスキルです。
 生成した Markdown を FlashPocket のリンク済みフォルダへ置きます。アプリ内AIや録音・文字起こし機能はありません。
 
 [English](README.en.md) · [架空の入力](examples/transcript.txt) · [出力例](examples/2026-09-28-weekly-sync.md)
 
 ## 導入
 
-Claude Code と Python 3.9 以上が必要です。リポジトリを取得後、スキルのフォルダをコピーします。
-既に同名のスキルがある場合は、内容を確認してから更新してください。
+Python 3.9 以上が必要です。既に同名のスキルがある場合は、内容を確認してから更新してください。
+
+### Claude Code
+
+リポジトリを取得後、スキルのフォルダをコピーします。
 
 ```sh
 git clone https://github.com/YahmanKing/flashpocket-transcript.git
@@ -22,6 +25,16 @@ Claude Code の新しいセッションで次のように依頼します。
 /flashpocket-transcript examples/transcript.txt
 2026-09-28 の weekly-sync として、仕事で使える英語のチャンクを作って。
 ```
+
+### Codex
+
+Codex で `$skill-installer` を開き、次の公開リポジトリURLを指定します。
+
+```text
+$skill-installer https://github.com/YahmanKing/flashpocket-transcript/tree/main/flashpocket-transcript
+```
+
+インストール後は、新しいCodexターンで `$flashpocket-transcript` を呼び出します。検出されない場合はCodexを再起動してください。
 
 初回は FlashPocket でリンクしている既存フォルダの場所を聞きます。macOS からアクセスできる
 同じ iCloud Drive フォルダを指定してください。iPhone 側のリンク設定は読み取りません。
