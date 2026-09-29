@@ -13,6 +13,13 @@ import uuid
 FP_LOOSE = re.compile(r'<!--\s*fp:.*?-->')
 FP_ID = re.compile(r'<!--\s*fp:([A-Za-z0-9_-]+)\s*-->')
 SR = re.compile(r'<!--\s*SR:.*?-->')
+# Cards stay on one physical line; the example is shown on the next display line after U+2028.
+LINE_SEPARATOR = '\u2028'
+EXAMPLE_LABEL = 'Example:'
+UNSAFE_LINE_CHARACTERS = '\r\n\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029'
+CHUNK_LENGTHS = {'短い': 'collocations and stock phrases', '標準': 'short expressions that are easy to reuse at work', '長め': 'expressions with surrounding context'}
+LEVELS = {'やさしい': 'A2-B1', '標準': 'B1-B2', '高度': 'B2-C1'}
+DEFAULT_CHUNK_LENGTH = DEFAULT_LEVEL = '標準'
 
 
 def config_path():
@@ -84,8 +91,20 @@ def separator(line):
     return None
 
 
+def resolve_settings(length=None, level=None):
+    """Fixed choices only; an omitted setting uses the default without asking again."""
+    length = DEFAULT_CHUNK_LENGTH if length is None else length
+    level = DEFAULT_LEVEL if level is None else level
+    if length not in CHUNK_LENGTHS:
+        raise ValueError('chunk length must be one of: ' + ', '.join(CHUNK_LENGTHS))
+    if level not in LEVELS:
+        raise ValueError('level must be one of: ' + ', '.join(LEVELS))
+    return {'chunk_length': length, 'level': level, 'cefr': LEVELS[level]}
+
+
 def parse_existing(text):
-    lines = text.splitlines()
+    # FlashPocket splits on LF only (after CRLF/CR); str.splitlines() would also cut at U+2028.
+    lines = re.split(r'\r\n|\r|\n', text)
     if any(line == '##' or line.startswith('## ') for line in lines):
         raise ValueError('H2 format is outside chunk comparison')
     rows = []
@@ -106,7 +125,7 @@ def parse_existing(text):
         answer = clean[index + count:].strip()
         if not question or not answer:
             raise ValueError('Empty question or answer')
-        chunk = answer.split(' — ', 1)[0]
+        chunk = re.split(' — |' + LINE_SEPARATOR, answer, maxsplit=1)[0]
         rows.append({'key': key(chunk), 'id': ids[0] if ids else None, 'id_count': len(ids), 'count': 2 if count == 3 else 1})
     if fence:
         raise ValueError('Unclosed code fence')
@@ -132,12 +151,13 @@ def scan(folder):
 
 
 def field(value, name):
-    if not isinstance(value, str) or not value.strip() or any(token in value for token in ('\n', '\r', '::', '<!--', '-->', '`')):
+    if not isinstance(value, str) or not value.strip() or any(token in value for token in (*UNSAFE_LINE_CHARACTERS, '::', '<!--', '-->', '`')):
         raise ValueError('Invalid single-line ' + name)
     return value.strip()
 
 
-def write_cards(date, name, candidates, append=None, limit=20):
+def write_cards(date, name, candidates, append=None, limit=20, length=None, level=None):
+    settings = resolve_settings(length, level)
     datetime.date.fromisoformat(date)
     if not isinstance(limit, int) or limit < 1:
         raise ValueError('limit must be positive')
@@ -190,9 +210,9 @@ def write_cards(date, name, candidates, append=None, limit=20):
             identifier = uuid.uuid4().hex
         used_ids.add(identifier)
         known.add(compare)
-        added.append(f'{meaning} {":::" if bidirectional else "::"} {chunk} — {example} <!-- fp:{identifier} -->')
+        added.append(f'{meaning} {":::" if bidirectional else "::"} {chunk}{LINE_SEPARATOR}{EXAMPLE_LABEL} {example} <!-- fp:{identifier} -->')
         count += weight
-    result = {'added_cards': count - existing_count, 'duplicate_candidates': duplicates, 'omitted_for_limit': omitted, 'excluded_files': warnings}
+    result = {'added_cards': count - existing_count, 'duplicate_candidates': duplicates, 'omitted_for_limit': omitted, 'excluded_files': warnings, 'settings': settings}
     if not added:
         return dict(result, status='no_additions', file=None)
     payload = ('\n'.join(added) + '\n').encode('utf-8')
@@ -226,6 +246,8 @@ def main():
     write.add_argument('--cards', type=Path, required=True)
     write.add_argument('--append')
     write.add_argument('--limit', type=int, default=20)
+    write.add_argument('--length', help='Chunk length: ' + ' / '.join(CHUNK_LENGTHS) + f' (default {DEFAULT_CHUNK_LENGTH})')
+    write.add_argument('--level', help='Level: ' + ' / '.join(LEVELS) + f' (default {DEFAULT_LEVEL})')
     args = parser.parse_args()
     try:
         if args.command == 'configure':
@@ -233,7 +255,7 @@ def main():
         elif args.command == 'status':
             result = {'output_directory': str(output_folder())}
         else:
-            result = write_cards(args.date, args.name, json.loads(args.cards.read_text(encoding='utf-8')), args.append, args.limit)
+            result = write_cards(args.date, args.name, json.loads(args.cards.read_text(encoding='utf-8')), args.append, args.limit, args.length, args.level)
         print(json.dumps(result, ensure_ascii=False))
     except (OSError, ValueError, TypeError) as error:
         print(json.dumps({'error': str(error)}, ensure_ascii=False))
