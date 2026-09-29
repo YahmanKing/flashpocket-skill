@@ -126,6 +126,65 @@ class DeckTests(unittest.TestCase):
         self.assertEqual(rows[0]['key'], 'real chunk')
         self.assertEqual(rows[0]['id'], 'x')
 
+    def test_card_is_one_physical_line_with_example_on_the_next_display_line(self):
+        result = self.write()
+        text = Path(result['file']).read_text(encoding='utf-8')
+        card_lines = [line for line in text.split('\n') if '::' in line]
+        self.assertEqual(len(card_lines), 3)
+        first = self.cards[0]
+        self.assertIn(f"{first['chunk']}\u2028Example: {first['example']} <!-- fp:", card_lines[0])
+        self.assertNotIn(' — ', text)
+        rows = d.parse_existing(text)
+        self.assertEqual([row['key'] for row in rows], [d.key(c['chunk']) for c in self.cards])
+        self.assertTrue(all(row['id'] and row['id_count'] == 1 for row in rows))
+
+    def test_old_and_new_formats_are_compared_and_appended_by_chunk_only(self):
+        (self.folder / 'old.md').write_text('# Old\n旧 :: get on the same page — Old example. <!-- fp:old1 -->\n')
+        new = self.folder / 'new.md'
+        new.write_text('# New\n旧 ::: iron out the details\u2028Example: Other. <!-- fp:new1 -->\n', encoding='utf-8')
+        original = new.read_bytes()
+        result = self.write(append=str(new))
+        self.assertEqual(result['duplicate_candidates'], 2)
+        self.assertEqual(result['added_cards'], 1)
+        self.assertTrue(new.read_bytes().startswith(original))
+        rows = d.parse_existing(new.read_text(encoding='utf-8'))
+        self.assertEqual([row['key'] for row in rows], ['iron out the details', 'keep everyone in the loop'])
+        self.assertEqual(rows[0]['id'], 'new1')
+        self.assertEqual(self.write()['status'], 'no_additions')
+
+    def test_line_separator_is_not_a_physical_line_break_and_cannot_be_injected(self):
+        rows = d.parse_existing('# X\nQ :: chunk\u2028Example: e <!-- fp:x -->\r\nR :: other <!-- fp:y -->')
+        self.assertEqual([row['key'] for row in rows], ['chunk', 'other'])
+        for bad in ['a\u2028b', 'a\u2029b', 'a\x85b']:
+            for name in ('meaning', 'chunk', 'example'):
+                with self.assertRaises(ValueError):
+                    self.write([dict(self.cards[0], **{name: bad})])
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_learning_settings_are_fixed_choices_with_standard_defaults(self):
+        self.assertEqual(list(d.CHUNK_LENGTHS), ['短い', '標準', '長め'])
+        self.assertEqual(list(d.LEVELS), ['やさしい', '標準', '高度'])
+        self.assertEqual(d.resolve_settings(), {'chunk_length': '標準', 'level': '標準', 'cefr': 'B1-B2'})
+        self.assertEqual(d.resolve_settings('短い', 'やさしい')['cefr'], 'A2-B1')
+        self.assertEqual(d.resolve_settings('長め', '高度')['cefr'], 'B2-C1')
+        for length, level in [('5', None), ('long', None), (None, 'C2'), (None, 'B1')]:
+            with self.assertRaises(ValueError):
+                d.resolve_settings(length, level)
+        with self.assertRaises(ValueError):
+            self.write(length='7語')
+        self.assertEqual(list(self.folder.iterdir()), [])
+        self.assertEqual(self.write()['settings']['chunk_length'], '標準')
+        self.assertEqual(self.write(self.cards[:1], length='長め', level='高度')['status'], 'no_additions')
+
+    def test_skill_documents_every_choice_and_the_input_first_order(self):
+        skill = (ROOT / 'flashpocket-transcript/SKILL.md').read_text(encoding='utf-8')
+        for label in [*d.CHUNK_LENGTHS, *d.LEVELS, 'A2–B1', 'B1–B2', 'B2–C1', 'U+2028', 'Example:']:
+            self.assertIn(label, skill)
+        self.assertLess(skill.index('Ask for the input first'), skill.index('decks.py" status'))
+        self.assertIn('organization-authorized', skill)
+        self.assertIn('not responsible', skill)
+        self.assertNotIn('Remove names', skill)
+
     def test_setting_survives_relocation_and_invalid_settings_recover(self):
         self.assertEqual(d.output_folder(), self.folder.resolve())
         other = self.root / 'other'
@@ -177,6 +236,9 @@ class DeckTests(unittest.TestCase):
     def test_sample_contains_expected_keys_and_no_sensitive_terms(self):
         text = (ROOT / 'examples/2026-09-28-weekly-sync.md').read_text()
         self.assertEqual([r['key'] for r in d.parse_existing(text)], [d.key(c['chunk']) for c in self.cards])
+        self.assertEqual([r['id'] for r in d.parse_existing(text)], ['sync1', 'sync2', 'sync3'])
+        for c in self.cards:
+            self.assertIn(f"{c['chunk']}\u2028Example: {c['example']} <!-- fp:", text)
         for secret in ['Mina', 'Owen', 'Northstar', 'Blue Harbor', 'Firefly', '48,000']:
             self.assertNotIn(secret, text)
 
