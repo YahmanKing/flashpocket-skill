@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('decks', ROOT / 'flashpocket-transcript/scripts/decks.py')
+spec = importlib.util.spec_from_file_location('decks', ROOT / 'flashpocket/scripts/decks.py')
 d = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(d)
 
@@ -18,7 +18,7 @@ class DeckTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.folder = self.root / 'decks'
         self.folder.mkdir()
-        self.env = patch.dict(os.environ, {'FLASHPOCKET_TRANSCRIPT_CONFIG_DIR': str(self.root / 'config')})
+        self.env = patch.dict(os.environ, {'FLASHPOCKET_CONFIG_DIR': str(self.root / 'config')})
         self.env.start()
         self.cards = json.loads((ROOT / 'examples/candidates.json').read_text())
         d.configure(self.folder)
@@ -177,8 +177,11 @@ class DeckTests(unittest.TestCase):
         self.assertEqual(self.write(self.cards[:1], length='長め', level='高度')['status'], 'no_additions')
 
     def test_skill_documents_every_choice_and_the_input_first_order(self):
-        skill = (ROOT / 'flashpocket-transcript/SKILL.md').read_text(encoding='utf-8')
-        for label in [*d.CHUNK_LENGTHS, *d.LEVELS, 'A2–B1', 'B1–B2', 'B2–C1', 'U+2028', 'Example:']:
+        skill = (ROOT / 'flashpocket/SKILL.md').read_text(encoding='utf-8')
+        transcript = (ROOT / 'flashpocket/references/transcript.md').read_text(encoding='utf-8')
+        for label in [*d.CHUNK_LENGTHS, *d.LEVELS, 'A2–B1', 'B1–B2', 'B2–C1']:
+            self.assertIn(label, transcript)
+        for label in ['U+2028', 'Example:', 'references/transcript.md', 'list-targets']:
             self.assertIn(label, skill)
         self.assertLess(skill.index('Ask for the input first'), skill.index('decks.py" status'))
         self.assertIn('organization-authorized', skill)
@@ -241,6 +244,135 @@ class DeckTests(unittest.TestCase):
             self.assertIn(f"{c['chunk']}\u2028Example: {c['example']} <!-- fp:", text)
         for secret in ['Mina', 'Owen', 'Northstar', 'Blue Harbor', 'Firefly', '48,000']:
             self.assertNotIn(secret, text)
+
+    def test_candidate_without_example_is_a_plain_card_that_appends_and_dedupes(self):
+        plain = {'meaning': '認識を合わせる', 'chunk': 'get on the same page'}
+        for candidate in (plain, dict(plain, example=None)):
+            folder = self.root / ('plain%d' % id(candidate))
+            folder.mkdir()
+            d.configure(folder)
+            result = self.write([candidate])
+            line = [l for l in Path(result['file']).read_text(encoding='utf-8').split('\n') if '::' in l][0]
+            self.assertRegex(line, r'^認識を合わせる :: get on the same page <!-- fp:[0-9a-f]+ -->$')
+            self.assertEqual(self.write([plain])['status'], 'no_additions')
+            more = self.write([plain, self.cards[1]], append=result['file'])
+            self.assertEqual(more['added_cards'], 1)
+            self.assertEqual(len(d.parse_existing(Path(result['file']).read_text(encoding='utf-8'))), 2)
+        for bad in ['', '   ', 5, 'a :: b']:
+            with self.assertRaises(ValueError):
+                self.write([dict(plain, example=bad)])
+
+    def test_date_defaults_to_today_and_slug_defaults_to_deck(self):
+        class Today(d.datetime.date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 10, 1)
+        with patch.object(d.datetime, 'date', Today):
+            result = d.write_cards(None, 'weekly-sync', self.cards)
+            self.assertEqual(Path(result['file']).name, '2026-10-01-weekly-sync.md')
+        self.assertTrue(Path(result['file']).read_text(encoding='utf-8').startswith('# 2026-10-01 weekly-sync\n'))
+        japanese = d.write_cards('2026-09-28', '週次の定例', [dict(self.cards[0], chunk='another chunk')])
+        self.assertEqual(Path(japanese['file']).name, '2026-09-28-deck.md')
+        with self.assertRaisesRegex(ValueError, 'deck name'):
+            d.write_cards('2026-09-28', ' ', self.cards)
+        with self.assertRaises(ValueError):
+            d.write_cards('2026-13-01', 'x', self.cards)
+
+    def test_old_config_is_read_but_new_path_wins_and_saves_go_to_new_path(self):
+        home = self.root / 'home'
+        legacy = home / '.config/flashpocket-transcript'
+        legacy.mkdir(parents=True)
+        (legacy / 'config.json').write_text(json.dumps({'output_directory': str(self.folder)}))
+        env = {k: v for k, v in os.environ.items() if not k.startswith('FLASHPOCKET_')}
+        with patch.dict(os.environ, env, clear=True), patch.object(d.Path, 'home', return_value=home):
+            self.assertEqual(d.output_folder(), self.folder.resolve())
+            self.assertEqual(d.config_path(), home / '.config/flashpocket/config.json')
+            other = self.root / 'other'
+            other.mkdir()
+            d.configure(other)
+            self.assertEqual(d.output_folder(), other.resolve())
+            self.assertEqual(json.loads((legacy / 'config.json').read_text())['output_directory'], str(self.folder))
+            (home / '.config/flashpocket/config.json').write_text('{broken')
+            with self.assertRaisesRegex(ValueError, 'needs_output_directory'):
+                d.output_folder()
+
+    def test_config_environment_variables_do_not_fall_back_to_home(self):
+        home = self.root / 'home'
+        legacy = home / '.config/flashpocket-transcript'
+        legacy.mkdir(parents=True)
+        (legacy / 'config.json').write_text(json.dumps({'output_directory': str(self.folder)}))
+        isolated = self.root / 'isolated'
+        old_dir, new_dir = self.root / 'old-env', self.root / 'new-env'
+        for name, value in (('FLASHPOCKET_TRANSCRIPT_CONFIG_DIR', isolated), ('FLASHPOCKET_CONFIG_DIR', isolated)):
+            env = {k: v for k, v in os.environ.items() if not k.startswith('FLASHPOCKET_')}
+            with patch.dict(os.environ, dict(env, **{name: str(value)}), clear=True), patch.object(d.Path, 'home', return_value=home):
+                with self.assertRaisesRegex(ValueError, 'needs_output_directory'):
+                    d.output_folder()
+        for directory in (old_dir, new_dir):
+            directory.mkdir()
+            other = self.root / ('target-' + directory.name)
+            other.mkdir()
+            (directory / 'config.json').write_text(json.dumps({'output_directory': str(other)}))
+        with patch.dict(os.environ, {'FLASHPOCKET_TRANSCRIPT_CONFIG_DIR': str(old_dir)}, clear=False):
+            os.environ.pop('FLASHPOCKET_CONFIG_DIR')
+            self.assertEqual(d.output_folder(), (self.root / 'target-old-env').resolve())
+        with patch.dict(os.environ, {'FLASHPOCKET_TRANSCRIPT_CONFIG_DIR': str(old_dir), 'FLASHPOCKET_CONFIG_DIR': str(new_dir)}):
+            self.assertEqual(d.output_folder(), (self.root / 'target-new-env').resolve())
+
+    def test_list_targets_returns_only_appendable_one_line_decks_newest_first(self):
+        def deck(name, content, age):
+            path = self.folder / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding='utf-8')
+            os.utime(path, (1_700_000_000 + age, 1_700_000_000 + age))
+            return path
+        ok = lambda n: f'# T\nQ{n} :: chunk {n} <!-- fp:id{n} -->\n'
+        for i in range(7):
+            deck(f'ok{i}.md', ok(i), i)
+        deck('nested/deep.md', ok(20), 50)
+        deck('h2.md', '## Q\nA\n', 60)
+        deck('noid.md', '# T\nQ :: A\n', 61)
+        deck('twoid.md', '# T\nQ :: A <!-- fp:a --><!-- fp:b -->\n', 62)
+        deck('dup.md', '# T\nQ :: A <!-- fp:a -->\nR :: B <!-- fp:a -->\n', 63)
+        deck('empty.md', '# Only a title\n', 64)
+        deck('.hidden/h.md', ok(30), 65)
+        deck('note.txt', ok(31), 66)
+        (self.folder / 'link.md').symlink_to(self.folder / 'ok0.md')
+        outside = self.root / 'outside.md'
+        outside.write_text(ok(40))
+        (self.folder / 'outside-link.md').symlink_to(outside)
+        names = [t['name'] for t in d.list_targets()['targets']]
+        self.assertEqual(names, ['deep.md', 'ok6.md', 'ok5.md', 'ok4.md', 'ok3.md'])
+        self.assertEqual(d.list_targets()['targets'][0]['cards'], 1)
+        for t in d.list_targets()['targets']:
+            d.load_append_target(t['file'], self.folder.resolve())
+        for age in (6, 5):
+            os.utime(self.folder / f'ok{age}.md', (1_700_000_100, 1_700_000_100))
+        self.assertEqual([t['name'] for t in d.list_targets()['targets']][:3], ['ok5.md', 'ok6.md', 'deep.md'])
+
+    def test_list_targets_prefer_goes_first_only_when_appendable(self):
+        for i in range(3):
+            path = self.folder / f'd{i}.md'
+            path.write_text(f'# T\nQ :: c{i} <!-- fp:i{i} -->\n')
+            os.utime(path, (1_700_000_000 + i, 1_700_000_000 + i))
+        listed = d.list_targets(prefer=str(self.folder / 'd0.md'))['targets']
+        self.assertEqual([t['name'] for t in listed], ['d0.md', 'd2.md', 'd1.md'])
+        (self.folder / 'bad.md').write_text('## Q\nA')
+        for prefer in (str(self.folder / 'bad.md'), str(self.root / 'nope.md'), str(self.root)):
+            self.assertEqual([t['name'] for t in d.list_targets(prefer=prefer)['targets']], ['d2.md', 'd1.md', 'd0.md'])
+        hidden = self.folder / '.h' / 'd.md'
+        hidden.parent.mkdir()
+        hidden.write_text('# T\nQ :: hidden <!-- fp:hid -->\n')
+        self.assertEqual([t['name'] for t in d.list_targets(prefer=str(hidden))['targets']], ['d2.md', 'd1.md', 'd0.md'])
+
+    def test_list_targets_cli_and_missing_folder(self):
+        import subprocess, sys
+        env = dict(os.environ, FLASHPOCKET_CONFIG_DIR=str(self.root / 'config'))
+        (self.folder / 'a.md').write_text('# T\nQ :: c <!-- fp:a -->\n')
+        out = subprocess.run([sys.executable, str(ROOT / 'flashpocket/scripts/decks.py'), 'list-targets'], env=env, capture_output=True, text=True)
+        self.assertEqual(json.loads(out.stdout)['targets'][0]['name'], 'a.md')
+        out = subprocess.run([sys.executable, str(ROOT / 'flashpocket/scripts/decks.py'), 'write', '--name', 'x', '--cards', str(ROOT / 'examples/candidates.json')], env=env, capture_output=True, text=True)
+        self.assertEqual(json.loads(out.stdout)['status'], 'written')
 
 
 if __name__ == '__main__':
