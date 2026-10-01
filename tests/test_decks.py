@@ -132,7 +132,8 @@ class DeckTests(unittest.TestCase):
         card_lines = [line for line in text.split('\n') if '::' in line]
         self.assertEqual(len(card_lines), 3)
         first = self.cards[0]
-        self.assertIn(f"{first['chunk']}\u2028Example: {first['example']} <!-- fp:", card_lines[0])
+        self.assertIn(f"{first['chunk']} >> Example: {first['example']} <!-- fp:", card_lines[0])
+        self.assertNotIn('\u2028', text)
         self.assertNotIn(' — ', text)
         rows = d.parse_existing(text)
         self.assertEqual([row['key'] for row in rows], [d.key(c['chunk']) for c in self.cards])
@@ -151,6 +152,38 @@ class DeckTests(unittest.TestCase):
         self.assertEqual([row['key'] for row in rows], ['iron out the details', 'keep everyone in the loop'])
         self.assertEqual(rows[0]['id'], 'new1')
         self.assertEqual(self.write()['status'], 'no_additions')
+
+    def test_same_chunk_is_extracted_from_every_separator_format(self):
+        for line in ['Q :: get on the same page\u2028Example: e <!-- fp:a -->',
+                     'Q :: get on the same page — Example: e <!-- fp:a -->',
+                     'Q :: get on the same page >> Example: e <!-- fp:a -->',
+                     'Q :: get on the same page <!-- fp:a -->',
+                     'Q :: get on the same page >> e — f\u2028g <!-- fp:a -->',
+                     'Q :: get on the same page\u2028e >> f — g <!-- fp:a -->']:
+            with self.subTest(line=line):
+                self.assertEqual(d.parse_existing('# X\n' + line)[0]['key'], 'get on the same page')
+
+    def test_appending_to_a_line_separator_deck_keeps_existing_bytes_and_ids(self):
+        old = self.folder / 'old-2028.md'
+        old.write_bytes('# Old\n旧 ::: other chunk\u2028Example: Old. <!-- fp:old1 -->\r\n旧 :: third — Old. <!-- fp:old2 -->\n'.encode('utf-8'))
+        original = old.read_bytes()
+        self.write(append=str(old))
+        updated = old.read_bytes()
+        self.assertTrue(updated.startswith(original))
+        added = updated[len(original):].decode('utf-8')
+        self.assertIn(' >> Example: ', added)
+        self.assertNotIn('\u2028', added)
+        rows = d.parse_existing(updated.decode('utf-8'))
+        self.assertEqual([row['id'] for row in rows[:2]], ['old1', 'old2'])
+
+    def test_candidate_containing_the_example_separator_is_rejected(self):
+        for bad in ['a >> b', 'a >>', '>> a', 'a\t>>\tb']:
+            for name in ('meaning', 'chunk', 'example'):
+                with self.subTest(bad=bad, name=name):
+                    with self.assertRaises(ValueError):
+                        self.write([dict(self.cards[0], **{name: bad})])
+        self.assertEqual(list(self.folder.iterdir()), [])
+        self.write([dict(self.cards[0], example='a>>b and 5 >>= 2')])
 
     def test_line_separator_is_not_a_physical_line_break_and_cannot_be_injected(self):
         rows = d.parse_existing('# X\nQ :: chunk\u2028Example: e <!-- fp:x -->\r\nR :: other <!-- fp:y -->')
@@ -181,7 +214,7 @@ class DeckTests(unittest.TestCase):
         transcript = (ROOT / 'flashpocket/references/transcript.md').read_text(encoding='utf-8')
         for label in [*d.CHUNK_LENGTHS, *d.LEVELS, 'A2–B1', 'B1–B2', 'B2–C1']:
             self.assertIn(label, transcript)
-        for label in ['U+2028', 'Example:', 'references/transcript.md', 'list-targets']:
+        for label in [' >> ', 'Example:', 'references/transcript.md', 'list-targets']:
             self.assertIn(label, skill)
         self.assertLess(skill.index('Ask for the input first'), skill.index('decks.py" status'))
         self.assertIn('organization-authorized', skill)
@@ -257,7 +290,7 @@ class DeckTests(unittest.TestCase):
         self.assertEqual([r['key'] for r in d.parse_existing(text)], [d.key(c['chunk']) for c in self.cards])
         self.assertEqual([r['id'] for r in d.parse_existing(text)], ['sync1', 'sync2', 'sync3'])
         for c in self.cards:
-            self.assertIn(f"{c['chunk']}\u2028Example: {c['example']} <!-- fp:", text)
+            self.assertIn(f"{c['chunk']} >> Example: {c['example']} <!-- fp:", text)
         for secret in ['Mina', 'Owen', 'Northstar', 'Blue Harbor', 'Firefly', '48,000']:
             self.assertNotIn(secret, text)
 
