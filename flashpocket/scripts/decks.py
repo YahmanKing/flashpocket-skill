@@ -23,8 +23,17 @@ DEFAULT_CHUNK_LENGTH = DEFAULT_LEVEL = '標準'
 
 
 def config_path():
-    directory = os.environ.get('FLASHPOCKET_TRANSCRIPT_CONFIG_DIR')
-    return (Path(directory).expanduser() if directory else Path.home() / '.config/flashpocket-transcript') / 'config.json'
+    """Where settings are saved: always the new name."""
+    directory = os.environ.get('FLASHPOCKET_CONFIG_DIR') or os.environ.get('FLASHPOCKET_TRANSCRIPT_CONFIG_DIR')
+    return (Path(directory).expanduser() if directory else Path.home() / '.config/flashpocket') / 'config.json'
+
+
+def read_config_path():
+    """Where settings are read: the saved path, or the old path only when no override is set and the new file is absent."""
+    path = config_path()
+    if os.environ.get('FLASHPOCKET_CONFIG_DIR') or os.environ.get('FLASHPOCKET_TRANSCRIPT_CONFIG_DIR') or path.exists():
+        return path
+    return Path.home() / '.config/flashpocket-transcript/config.json'
 
 
 def valid_folder(path):
@@ -33,7 +42,7 @@ def valid_folder(path):
 
 def output_folder():
     try:
-        data = json.loads(config_path().read_text())
+        data = json.loads(read_config_path().read_text())
         path = Path(data['output_directory'])
         if not path.is_absolute() or not valid_folder(path):
             raise ValueError('output_directory is unavailable or not writable')
@@ -156,26 +165,59 @@ def field(value, name):
     return value.strip()
 
 
+def load_append_target(supplied, folder):
+    """The one definition of an appendable deck, shared by write --append and list-targets."""
+    supplied = Path(supplied).expanduser()
+    target = supplied.resolve()
+    if supplied.is_symlink() or not target.is_relative_to(folder) or target.suffix != '.md':
+        raise ValueError('Append target must be a Markdown file inside the output directory')
+    original = target.read_bytes()
+    rows = parse_existing(original.decode('utf-8'))
+    ids = [row['id'] for row in rows]
+    if any(row['id_count'] != 1 for row in rows) or any(value is None for value in ids) or len(set(ids)) != len(ids):
+        raise ValueError('Append target needs exactly one valid, unique ID per card line')
+    return target, original, rows
+
+
+def list_targets(prefer=None, limit=5):
+    """Appendable one-line decks, newest first; an appendable --prefer deck goes first."""
+    folder = output_folder()
+    found = []
+    for path in folder.rglob('*.md'):
+        relative = path.relative_to(folder)
+        if any(part.startswith('.') for part in relative.parts[:-1]):
+            continue
+        try:
+            target, _, rows = load_append_target(path, folder)
+            found.append((-target.stat().st_mtime, str(relative), target, rows))
+        except (OSError, UnicodeError, ValueError):
+            continue
+    found.sort(key=lambda item: item[:2])
+    if prefer:
+        try:
+            target, _, rows = load_append_target(prefer, folder)
+            found = [(0, '', target, rows)] + [item for item in found if item[2] != target]
+        except (OSError, UnicodeError, ValueError):
+            pass
+    return {'targets': [{'file': str(target), 'name': target.name, 'cards': sum(row['count'] for row in rows),
+                         'modified': datetime.datetime.fromtimestamp(target.stat().st_mtime).isoformat(timespec='seconds')}
+                        for _, _, target, rows in found[:limit]]}
+
+
 def write_cards(date, name, candidates, append=None, limit=20, length=None, level=None):
     settings = resolve_settings(length, level)
+    date = datetime.date.today().isoformat() if date is None else date
     datetime.date.fromisoformat(date)
     if not isinstance(limit, int) or limit < 1:
         raise ValueError('limit must be positive')
-    name = field(name, 'meeting name')
-    slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') or 'meeting'
+    name = field(name, 'deck name')
+    slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') or 'deck'
     folder = output_folder()
     known, warnings = scan(folder)
     original, target, used_ids, existing_count = b'', None, set(), 0
     if append:
-        supplied = Path(append).expanduser()
-        target = supplied.resolve()
-        if supplied.is_symlink() or not target.is_relative_to(folder) or target.suffix != '.md':
-            raise ValueError('Append target must be a Markdown file inside the output directory')
-        original = target.read_bytes()
-        rows = parse_existing(original.decode('utf-8'))
+        target, original, rows = load_append_target(append, folder)
         ids = [row['id'] for row in rows]
-        if any(row['id_count'] != 1 for row in rows) or any(value is None for value in ids) or len(set(ids)) != len(ids):
-            raise ValueError('Append target needs exactly one valid, unique ID per card line')
         known.update(row['key'] for row in rows)
         used_ids = set(ids)
         existing_count = sum(row['count'] for row in rows)
@@ -189,7 +231,9 @@ def write_cards(date, name, candidates, append=None, limit=20, length=None, leve
         if re.match(r'^#{1,2}(?:\s|$)', meaning):
             raise ValueError('Meaning cannot start with an H1/H2 heading')
         chunk = field(candidate.get('chunk'), 'chunk')
-        example = field(candidate.get('example'), 'example')
+        example = candidate.get('example')
+        if example is not None:
+            example = field(example, 'example')
         if ' — ' in chunk:
             raise ValueError('Chunk cannot contain the example separator')
         bidirectional = candidate.get('bidirectional', False)
@@ -210,7 +254,7 @@ def write_cards(date, name, candidates, append=None, limit=20, length=None, leve
             identifier = uuid.uuid4().hex
         used_ids.add(identifier)
         known.add(compare)
-        added.append(f'{meaning} {":::" if bidirectional else "::"} {chunk}{LINE_SEPARATOR}{EXAMPLE_LABEL} {example} <!-- fp:{identifier} -->')
+        added.append(f'{meaning} {":::" if bidirectional else "::"} {chunk}{f"{LINE_SEPARATOR}{EXAMPLE_LABEL} {example}" if example else ""} <!-- fp:{identifier} -->')
         count += weight
     result = {'added_cards': count - existing_count, 'duplicate_candidates': duplicates, 'omitted_for_limit': omitted, 'excluded_files': warnings, 'settings': settings}
     if not added:
@@ -240,8 +284,10 @@ def main():
     setup = commands.add_parser('configure')
     setup.add_argument('directory')
     commands.add_parser('status')
+    targets = commands.add_parser('list-targets')
+    targets.add_argument('--prefer', help='An existing deck to list first when it can be appended to')
     write = commands.add_parser('write')
-    write.add_argument('--date', required=True)
+    write.add_argument('--date', help='YYYY-MM-DD (default: today, local)')
     write.add_argument('--name', required=True)
     write.add_argument('--cards', type=Path, required=True)
     write.add_argument('--append')
@@ -254,6 +300,8 @@ def main():
             result = configure(args.directory)
         elif args.command == 'status':
             result = {'output_directory': str(output_folder())}
+        elif args.command == 'list-targets':
+            result = list_targets(args.prefer)
         else:
             result = write_cards(args.date, args.name, json.loads(args.cards.read_text(encoding='utf-8')), args.append, args.limit, args.length, args.level)
         print(json.dumps(result, ensure_ascii=False))

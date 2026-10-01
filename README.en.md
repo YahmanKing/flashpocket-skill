@@ -1,7 +1,9 @@
-# FlashPocket Transcript
+# FlashPocket skill
 
-A Claude Code and Codex skill that turns English expressions actually used in a meeting into Japanese-to-English cards,
-then saves a Markdown deck to the folder you use with FlashPocket. It does not record or transcribe meetings.
+A Claude Code and Codex skill that makes FlashPocket decks of Japanese-to-English cards.
+The input is a transcript, a conversation or text. Today the **transcript** input works: it turns English expressions actually used in a
+meeting into cards. Conversation and text inputs are planned. The deck is saved as Markdown to the folder you use with FlashPocket.
+It does not record or transcribe meetings. There is one skill (`flashpocket`); it picks the input type from the conversation.
 
 [日本語](README.md) · [Fictional transcript](examples/transcript.txt) · [Example deck](examples/2026-09-28-weekly-sync.md)
 
@@ -12,15 +14,15 @@ Requires Python 3.9+. If a skill with the same name is already installed, inspec
 ### Claude Code
 
 ```sh
-git clone https://github.com/YahmanKing/flashpocket-transcript.git
+git clone https://github.com/YahmanKing/flashpocket-skill.git
 mkdir -p ~/.claude/skills
-cp -R flashpocket-transcript/flashpocket-transcript ~/.claude/skills/
+cp -R flashpocket-skill/flashpocket ~/.claude/skills/
 ```
 
 Start a new Claude Code session:
 
 ```text
-/flashpocket-transcript examples/transcript.txt
+/flashpocket examples/transcript.txt
 Create useful workplace English chunks for the 2026-09-28 weekly-sync.
 ```
 
@@ -29,16 +31,26 @@ Create useful workplace English chunks for the 2026-09-28 weekly-sync.
 Open `$skill-installer` in Codex and provide this public repository URL:
 
 ```text
-$skill-installer https://github.com/YahmanKing/flashpocket-transcript/tree/main/flashpocket-transcript
+$skill-installer https://github.com/YahmanKing/flashpocket-skill/tree/main/flashpocket
 ```
 
-After installation, invoke `$flashpocket-transcript` in a new Codex turn. Restart Codex if it does not appear.
+After installation, invoke `$flashpocket` in a new Codex turn. Restart Codex if it does not appear.
 
 On first use, select the existing writable folder you linked in FlashPocket (the same iCloud Drive folder accessible
 from your Mac). The skill cannot read the iPhone's folder bookmark. It remembers your selection in
-`~/.config/flashpocket-transcript/config.json`, independently of its installation location. A new device needs its
+`~/.config/flashpocket/config.json`, independently of its installation location. A new device needs its
 own selection. Missing, unwritable destinations or broken settings trigger a new selection; no fallback folder is chosen.
 Only the destination path is stored in settings.
+
+### Migrating from the old name (`flashpocket-transcript`)
+
+The skill and its folder were renamed from `flashpocket-transcript` to `flashpocket`, and the repository to `flashpocket-skill`.
+The old install URL (`.../tree/main/flashpocket-transcript`) no longer works because the folder name changed. Delete the old skill and reinstall.
+
+- **Claude Code:** delete the old skill with `rm -rf ~/.claude/skills/flashpocket-transcript`, then install `flashpocket` as above. Invoke it with `/flashpocket`.
+- **Codex:** delete the old `flashpocket-transcript` skill (usually `~/.codex/skills/flashpocket-transcript`), then reinstall with `$skill-installer` and the new URL above. Invoke it with `$flashpocket`.
+- **Settings:** an old `~/.config/flashpocket-transcript/config.json` is still read while the new `~/.config/flashpocket/config.json` does not exist, so you are not asked for the destination again. New saves go to the new location. The old file is not migrated or deleted automatically.
+- **Environment variable:** `FLASHPOCKET_TRANSCRIPT_CONFIG_DIR` is now `FLASHPOCKET_CONFIG_DIR`; the old name is still read. When either is set, only that directory is used.
 
 ## Use
 
@@ -51,7 +63,8 @@ paraphrased example with an `Example:` label; FlashPocket shows the chunk in bol
 line separator (U+2028), so the deck still imports unchanged. Use `:::` only when you explicitly want both recognition and production practice; `::` is the default.
 
 Files are named `YYYY-MM-DD-<name>.md`. Name collisions create `-2`, `-3`, etc.; existing files are never overwritten.
-To append, explicitly supply the target file's path. Date/name alone does not identify the same meeting.
+The candidate list and the save choice are confirmed once, together: a new deck (default) or one of up to 5 appendable one-line decks in the folder, newest first.
+A deck you pick counts as an explicit append target; a date/name match alone never appends. A card without an example (`meaning :: chunk <!-- fp:ID -->`) can be written; transcript input always includes one.
 Appending preserves the original bytes and IDs and requires an in-folder one-line deck with one valid, unique ID per card line.
 Invalid targets are left unchanged. When all candidates are duplicates, no new deck is created.
 
@@ -109,7 +122,7 @@ Existing decks (optional):
 python3 -m unittest discover -s tests -v
 ```
 
-Set `FLASHPOCKET_TRANSCRIPT_CONFIG_DIR` to a temporary directory to isolate settings. Do not change HOME.
+Set `FLASHPOCKET_CONFIG_DIR` to a temporary directory to isolate settings. Do not change HOME.
 Tests cover duplicate normalization, unchanged old bytes/IDs, collisions, card limits, malformed inputs, settings recovery,
 choice defaults, U+2028 one-line cards and old/new format comparison.
 The Python helper handles local files only. Expression selection remains with the agent.

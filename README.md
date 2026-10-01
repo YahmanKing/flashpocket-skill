@@ -1,7 +1,9 @@
-# FlashPocket Transcript
+# FlashPocket スキル
 
-会議で実際に使われた英語のチャンクから、日本語→英語の復習カードを作る、Claude Code と Codex 対応のスキルです。
+FlashPocket のDeck（日本語→英語の復習カード）を作る、Claude Code と Codex 対応のスキルです。
+入力は文字起こし／会話／文章。現在使えるのは**文字起こし**で、会議で実際に使われた英語のチャンクをカードにします。会話・文章からの入力は今後追加します。
 生成した Markdown を FlashPocket のリンク済みフォルダへ置きます。アプリ内AIや録音・文字起こし機能はありません。
+スキルは1つ（`flashpocket`）で、入力の種類は会話の文脈から選びます。
 
 [English](README.en.md) · [架空の入力](examples/transcript.txt) · [出力例](examples/2026-09-28-weekly-sync.md)
 
@@ -14,15 +16,15 @@ Python 3.9 以上が必要です。既に同名のスキルがある場合は、
 リポジトリを取得後、スキルのフォルダをコピーします。
 
 ```sh
-git clone https://github.com/YahmanKing/flashpocket-transcript.git
+git clone https://github.com/YahmanKing/flashpocket-skill.git
 mkdir -p ~/.claude/skills
-cp -R flashpocket-transcript/flashpocket-transcript ~/.claude/skills/
+cp -R flashpocket-skill/flashpocket ~/.claude/skills/
 ```
 
 Claude Code の新しいセッションで次のように依頼します。
 
 ```text
-/flashpocket-transcript examples/transcript.txt
+/flashpocket examples/transcript.txt
 2026-09-28 の weekly-sync として、仕事で使える英語のチャンクを作って。
 ```
 
@@ -31,16 +33,26 @@ Claude Code の新しいセッションで次のように依頼します。
 Codex で `$skill-installer` を開き、次の公開リポジトリURLを指定します。
 
 ```text
-$skill-installer https://github.com/YahmanKing/flashpocket-transcript/tree/main/flashpocket-transcript
+$skill-installer https://github.com/YahmanKing/flashpocket-skill/tree/main/flashpocket
 ```
 
-インストール後は、新しいCodexターンで `$flashpocket-transcript` を呼び出します。検出されない場合はCodexを再起動してください。
+インストール後は、新しいCodexターンで `$flashpocket` を呼び出します。検出されない場合はCodexを再起動してください。
 
 初回は FlashPocket でリンクしている既存フォルダの場所を聞きます。macOS からアクセスできる
 同じ iCloud Drive フォルダを指定してください。iPhone 側のリンク設定は読み取りません。
-設定は `~/.config/flashpocket-transcript/config.json` に保存され、スキルを移動しても残ります。
+設定は `~/.config/flashpocket/config.json` に保存され、スキルを移動しても残ります。
 2回目以降は有効な保存先があれば聞きません。保存先が消えた・書けない・設定が壊れた場合は再選択します。
 別端末では初回指定が必要です。初回設定には保存先だけを保持します。
+
+### 旧名（`flashpocket-transcript`）からの移行
+
+スキル名とフォルダ名が `flashpocket-transcript` から `flashpocket` に変わりました。リポジトリ名も `flashpocket-skill` になります。
+旧インストールURL（`.../tree/main/flashpocket-transcript`）はフォルダ名が変わったため使えません。旧スキルを削除して入れ直してください。
+
+- **Claude Code:** `rm -rf ~/.claude/skills/flashpocket-transcript` で旧スキルを削除し、上の手順で `flashpocket` を入れます。呼び出しは `/flashpocket` です。
+- **Codex:** 旧 `flashpocket-transcript` スキルを削除（通常は `~/.codex/skills/flashpocket-transcript`）し、上の新しいURLで `$skill-installer` から入れ直します。呼び出しは `$flashpocket` です。
+- **設定:** 旧 `~/.config/flashpocket-transcript/config.json` は、新しい `~/.config/flashpocket/config.json` が無い間そのまま読まれます。保存先を聞かれることはありません。新しく保存するときは新しい場所へ書きます。旧ファイルは自動では移行・削除されません。
+- **環境変数:** `FLASHPOCKET_TRANSCRIPT_CONFIG_DIR` は `FLASHPOCKET_CONFIG_DIR` になりました。旧名も引き続き読みます。環境変数を指定したときは、そのディレクトリだけを見ます。
 
 ## 使い方
 
@@ -54,8 +66,10 @@ $skill-installer https://github.com/YahmanKing/flashpocket-transcript/tree/main/
   1枚は1つの物理行のまま、行区切り（U+2028）で表示上だけ改行するので取り込みを壊しません。既定は `::`。
   両方向を明示的に希望した表現だけ `:::` を使います。
 - 出力は `YYYY-MM-DD-<name>.md`。同名ファイルがあれば `-2`、`-3` を付け、新規作成します。
-- 追記するときは「このファイルへ追記して」と既存ファイルのパスを明示します。日付・名前だけでは追記しません。
+- 保存の確認は、候補の一覧と一緒に1回だけ行います。「新規作成」（既定）か、追記先の候補（保存先内で追記できる1行形式のDeck、更新日時の新しい順に最大5件）から選べます。
+  選んだDeckは追記先として扱います。日付・名前が一致しただけでは追記しません。
   既存本文とIDは保持されます。表裏が空・IDがない・重複ID・保存先外などの追記先は変更しません。
+- 例文のないカード（`意味 :: チャンク <!-- fp:ID -->`）も書き出せます。文字起こしの入力では例文を付けます。
 - 既存と同じチャンクは除外し、追加がなければDeckを作りません。
 - iPhone の FlashPocket でリンク済みフォルダを読み直すためにDeck一覧を下へ引っ張ります。
   フォルダを使わない場合は、生成されたファイルを取り込みます。
@@ -113,7 +127,7 @@ H2形式や壊れたDeckは比較対象外です。意味的類似や語形変�
 python3 -m unittest discover -s tests -v
 ```
 
-設定を隔離するには `FLASHPOCKET_TRANSCRIPT_CONFIG_DIR` に一時ディレクトリを指定します。
+設定を隔離するには `FLASHPOCKET_CONFIG_DIR` に一時ディレクトリを指定します。
 HOMEや実利用の設定を変更する必要はありません。テストは既存ID・本文保持、同名衝突、重複の正規化、
 両方向を含む枚数上限、無効な保存先と設定、書式不正、選択肢の既定値、U+2028を含む1行カードと新旧形式の重複比較を確認します。
 ヘルパーはローカルのファイル処理のみで、言語表現の選定はエージェントが行います。
