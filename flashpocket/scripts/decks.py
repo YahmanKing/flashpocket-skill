@@ -196,7 +196,9 @@ def list_targets(prefer=None, limit=5):
     if prefer:
         try:
             target, _, rows = load_append_target(prefer, folder)
-            found = [(0, '', target, rows)] + [item for item in found if item[2] != target]
+            if any(part.startswith('.') for part in target.relative_to(folder).parts[:-1]):
+                raise ValueError('Hidden directories are not listed')
+            found =[(0, '', target, rows)] + [item for item in found if item[2] != target]
         except (OSError, UnicodeError, ValueError):
             pass
     return {'targets': [{'file': str(target), 'name': target.name, 'cards': sum(row['count'] for row in rows),

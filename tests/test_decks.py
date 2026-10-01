@@ -360,6 +360,10 @@ class DeckTests(unittest.TestCase):
         (self.folder / 'bad.md').write_text('## Q\nA')
         for prefer in (str(self.folder / 'bad.md'), str(self.root / 'nope.md'), str(self.root)):
             self.assertEqual([t['name'] for t in d.list_targets(prefer=prefer)['targets']], ['d2.md', 'd1.md', 'd0.md'])
+        hidden = self.folder / '.h' / 'd.md'
+        hidden.parent.mkdir()
+        hidden.write_text('# T\nQ :: hidden <!-- fp:hid -->\n')
+        self.assertEqual([t['name'] for t in d.list_targets(prefer=str(hidden))['targets']], ['d2.md', 'd1.md', 'd0.md'])
 
     def test_list_targets_cli_and_missing_folder(self):
         import subprocess, sys
