@@ -188,6 +188,22 @@ class DeckTests(unittest.TestCase):
         self.assertIn('not responsible', skill)
         self.assertNotIn('Remove names', skill)
 
+    def test_conversation_mode_name_limit_and_documents(self):
+        result = d.write_cards('2026-10-01', 'conversation', self.cards)
+        self.assertEqual(Path(result['file']).name, '2026-10-01-conversation.md')
+        self.assertTrue(Path(result['file']).read_text().startswith('# 2026-10-01 conversation\n'))
+        many = [{'meaning': f'意味{i}', 'chunk': f'expression number {chr(97 + i)}', 'bidirectional': False} for i in range(21)]
+        self.assertEqual(d.write_cards('2026-10-02', 'conversation', many, limit=21)['added_cards'], 21)
+        more = [{**c, 'chunk': c['chunk'] + ' again'} for c in many]
+        capped = d.write_cards('2026-10-03', 'conversation', more)
+        self.assertEqual((capped['added_cards'], capped['omitted_for_limit']), (20, 1))
+        skill = (ROOT / 'flashpocket/SKILL.md').read_text(encoding='utf-8')
+        conversation = (ROOT / 'flashpocket/references/conversation.md').read_text(encoding='utf-8')
+        self.assertIn('references/conversation.md', skill)
+        self.assertLess(skill.index('references/transcript.md'), skill.index('references/conversation.md'))
+        for label in ['.flashpocket-conversation-', '--limit', '--name conversation']:
+            self.assertIn(label, conversation)
+
     def test_setting_survives_relocation_and_invalid_settings_recover(self):
         self.assertEqual(d.output_folder(), self.folder.resolve())
         other = self.root / 'other'
