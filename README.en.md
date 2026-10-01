@@ -1,11 +1,11 @@
 # FlashPocket skill
 
 A Claude Code and Codex skill that makes FlashPocket decks of Japanese-to-English cards.
-The input is a transcript, a conversation or text. Today the **transcript** and **conversation** inputs work: a transcript turns English expressions actually used in a
-meeting into cards, and a conversation turns expressions you asked about, had corrected or wanted to remember into cards. Text input is planned. The deck is saved as Markdown to the folder you use with FlashPocket.
+The input is a transcript, a conversation or text. The **transcript**, **conversation** and **text** inputs work: a transcript turns English expressions actually used in a
+meeting into cards, and a conversation turns expressions you asked about, had corrected or wanted to remember into cards. A text turns reusable chunks from an article, email or document into cards. The deck is saved as Markdown to the folder you use with FlashPocket.
 It does not record or transcribe meetings. There is one skill (`flashpocket`); it picks the input type from the conversation.
 
-[日本語](README.md) · [Fictional transcript](examples/transcript.txt) · [Fictional conversation](examples/conversation.md) · [Example deck](examples/2026-09-28-weekly-sync.md)
+[日本語](README.md) · [Fictional transcript](examples/transcript.txt) · [Fictional conversation](examples/conversation.md) · [Fictional article](examples/article.txt) · [Example deck](examples/2026-09-28-weekly-sync.md)
 
 ## Install
 
@@ -56,6 +56,7 @@ The old install URL (`.../tree/main/flashpocket-transcript`) no longer works bec
 
 Provide a transcript path or paste the text; if none is given, the skill asks for it first. A path grants read access only.
 To make cards from a conversation, invoke `/flashpocket` after talking with the agent and ask for cards from the conversation (it runs only when invoked). It picks expressions you asked how to say, had corrected, asked the meaning of, or said you want to remember (or a list you pass directly). Candidates are kept in `.flashpocket-conversation-*.json` in the working directory and deleted after saving. You are asked once, when you say to save, with everything selected and only exclusions to name.
+To make cards from an article, email or other non-transcript English text, pass a file path or paste it and ask for a deck. When unsure, it is treated as text. The deck name comes from the title (or `reading`); examples are written in the agent's own words, with no sentences, names or figures from the source.
 Two fixed choices tune extraction: chunk length `短い` (collocations, stock phrases) / `標準` (default) / `長め` (with surrounding
 context), and level `やさしい (A2–B1)` / `標準 (B1–B2)` (default) / `高度 (B2–C1)`. Omitted choices use the default without
 a follow-up question; numbers and free-text values are rejected. Default maximum: **20 parsed cards**, with each `:::` line counting as two.

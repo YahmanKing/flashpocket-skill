@@ -237,6 +237,17 @@ class DeckTests(unittest.TestCase):
         for label in ['.flashpocket-conversation-', '--limit', '--name conversation']:
             self.assertIn(label, conversation)
 
+    def test_text_mode_is_routed_and_documented(self):
+        skill = (ROOT / 'flashpocket/SKILL.md').read_text(encoding='utf-8')
+        text = (ROOT / 'flashpocket/references/text.md').read_text(encoding='utf-8')
+        self.assertIn('references/text.md', skill)
+        self.assertLess(skill.index('references/transcript.md'), skill.index('references/text.md'))
+        self.assertLess(skill.index('references/text.md'), skill.index('references/conversation.md'))
+        self.assertNotIn('Anything else', skill)
+        for label in ['Learning settings', '--name', 'reading', 'Every candidate needs an `example`']:
+            self.assertIn(label, text)
+        self.assertEqual(Path(d.write_cards('2026-10-01', 'reading', self.cards)['file']).name, '2026-10-01-reading.md')
+
     def test_setting_survives_relocation_and_invalid_settings_recover(self):
         self.assertEqual(d.output_folder(), self.folder.resolve())
         other = self.root / 'other'

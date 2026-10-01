@@ -1,0 +1,9 @@
+Why Small Teams Ship Faster
+
+When a team grows beyond a handful of people, the first thing to slow down is rarely the work itself. It is the conversation around the work. Every new person adds another set of opinions to weigh, another calendar to line up and another thread to keep track of.
+
+Founders often assume that hiring will speed things up. In practice, new hires need time to get up to speed, and the people who know the product best end up spending their days answering questions instead of building. A common way out of this trap is to keep teams small and give each one a clear area of ownership, so decisions do not have to wait for a long chain of approvals.
+
+None of this means that large organisations are doomed. It means that they have to work harder to keep the overhead down. Teams that write things down, set a single owner for each decision and review progress on a regular rhythm tend to avoid the worst of the slowdown. Those that rely on hallway conversations usually find that important details fall through the cracks.
+
+The lesson is not to stay small forever, but to notice early when coordination starts to cost more than it returns, and to act before it becomes the default way of working.

@@ -1,6 +1,6 @@
 ---
 name: flashpocket
-description: Make FlashPocket Markdown decks of Japanese-to-English chunk cards from what the user supplies (a meeting transcript file or pasted text, a list of expressions, or the current conversation) and save them to the linked folder. Use only when the user explicitly invokes it or asks to make cards from the conversation, a file, text or a list; do not use it for ordinary English questions. Recording, transcription, and in-app AI are outside this skill.
+description: Make FlashPocket Markdown decks of Japanese-to-English chunk cards from what the user supplies (a meeting transcript, an article or other English text as a file or paste, a list of expressions, or the current conversation) and save them to the linked folder. Use only when the user explicitly invokes it or asks to make cards from the conversation, a file, text or a list; do not use it for ordinary English questions. Recording, transcription, and in-app AI are outside this skill.
 ---
 
 # FlashPocket deck writer
@@ -11,10 +11,11 @@ One core writes the deck; an input mode decides which expressions become cards. 
 
 | The user supplies | Mode | Read before extracting |
 |---|---|---|
-| A file path or pasted text of a meeting transcript | transcript | `references/transcript.md` |
-| Anything else: no file, or a request such as "from this conversation" or "cards for these expressions" | conversation | `references/conversation.md` |
+| A meeting or call transcript (a file path or pasted text with speaker or time labels, or one the user calls a meeting transcript) | transcript | `references/transcript.md` |
+| Any other English writing of several sentences, such as an article, email or document (a file path or pasted text). Use this when unsure between transcript and text | text | `references/text.md` |
+| No source material: the conversation itself ("from this conversation"), or a list of expressions ("cards for these expressions") | conversation | `references/conversation.md` |
 
-Read only the reference for the chosen mode. It decides what to extract, the card limit and the deck name/date. Everything below applies to every mode unless the mode reference says otherwise.
+Read only the reference for the chosen mode. It decides what to extract, the card limit and the deck name/date. The one exception: text mode also reads the `Learning settings` section of `references/transcript.md`. Everything below applies to every mode unless the mode reference says otherwise.
 
 ## Input and responsibility
 
