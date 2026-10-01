@@ -13,7 +13,9 @@ import uuid
 FP_LOOSE = re.compile(r'<!--\s*fp:.*?-->')
 FP_ID = re.compile(r'<!--\s*fp:([A-Za-z0-9_-]+)\s*-->')
 SR = re.compile(r'<!--\s*SR:.*?-->')
-# Cards stay on one physical line; the example is shown on the next display line after U+2028.
+# Cards stay on one physical line; FlashPocket Markdown v1.3 shows the example on the next display line after ' >> '.
+# U+2028 is the older example separator: still read in existing decks, never written.
+EXAMPLE_SEPARATOR = ' >> '
 LINE_SEPARATOR = '\u2028'
 EXAMPLE_LABEL = 'Example:'
 UNSAFE_LINE_CHARACTERS = '\r\n\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029'
@@ -134,7 +136,7 @@ def parse_existing(text):
         answer = clean[index + count:].strip()
         if not question or not answer:
             raise ValueError('Empty question or answer')
-        chunk = re.split(' — |' + LINE_SEPARATOR, answer, maxsplit=1)[0]
+        chunk = re.split(' — |' + re.escape(EXAMPLE_SEPARATOR) + '|' + LINE_SEPARATOR, answer, maxsplit=1)[0]
         rows.append({'key': key(chunk), 'id': ids[0] if ids else None, 'id_count': len(ids), 'count': 2 if count == 3 else 1})
     if fence:
         raise ValueError('Unclosed code fence')
@@ -162,7 +164,11 @@ def scan(folder):
 def field(value, name):
     if not isinstance(value, str) or not value.strip() or any(token in value for token in (*UNSAFE_LINE_CHARACTERS, '::', '<!--', '-->', '`')):
         raise ValueError('Invalid single-line ' + name)
-    return value.strip()
+    value = value.strip()
+    # A stripped value that starts or ends with '>>' would form ' >> ' next to a neighbouring space.
+    if re.search(r'(?:^|\s)>>(?:\s|$)', value):
+        raise ValueError('A value cannot contain the example separator ' + repr(EXAMPLE_SEPARATOR.strip()) + ': ' + name)
+    return value
 
 
 def load_append_target(supplied, folder):
@@ -256,7 +262,7 @@ def write_cards(date, name, candidates, append=None, limit=20, length=None, leve
             identifier = uuid.uuid4().hex
         used_ids.add(identifier)
         known.add(compare)
-        added.append(f'{meaning} {":::" if bidirectional else "::"} {chunk}{f"{LINE_SEPARATOR}{EXAMPLE_LABEL} {example}" if example else ""} <!-- fp:{identifier} -->')
+        added.append(f'{meaning} {":::" if bidirectional else "::"} {chunk}{f"{EXAMPLE_SEPARATOR}{EXAMPLE_LABEL} {example}" if example else ""} <!-- fp:{identifier} -->')
         count += weight
     result = {'added_cards': count - existing_count, 'duplicate_candidates': duplicates, 'omitted_for_limit': omitted, 'excluded_files': warnings, 'settings': settings}
     if not added:
